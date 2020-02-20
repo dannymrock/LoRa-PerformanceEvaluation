@@ -37,7 +37,7 @@ int sats; // GPS satellite count
 char s[32]; // used to sprintf for Serial output
 float vBat; // battery voltage
 long nextPacketTime;
-bool pressed=false;
+volatile int pressed = 0;
 
 // These callbacks are only used in over-the-air activation, so they are
 // left empty here (we cannot leave them out completely unless
@@ -45,8 +45,11 @@ bool pressed=false;
 void os_getArtEui (u1_t* buf) { }
 void os_getDevEui (u1_t* buf) { }
 void os_getDevKey (u1_t* buf) { }
+
+
 void IRAM_ATTR isr() {
-  pressed = true;
+  pressed = 1;
+  Serial.print("ISR button"); 
 }
 
 static osjob_t sendjob; // callback to LoRa send packet 
@@ -159,6 +162,8 @@ void onEvent (ev_t ev) {
 void do_send(osjob_t* j) {  
 
   getBatteryVoltage();
+  Serial.println(F("Pasó por acá: do send"));
+      
 
   // Check if there is not a current TX/RX job running
   if (LMIC.opmode & OP_TXRXPEND)
@@ -169,6 +174,7 @@ void do_send(osjob_t* j) {
   { 
     if (gps1.checkGpsFix())
     {
+      Serial.println(F("Pasó por acá: GPS Fix"));
       digitalWrite(BUILTIN_LED,HIGH);
     }
     else
@@ -177,7 +183,10 @@ void do_send(osjob_t* j) {
       os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(GPS_FIX_RETRY_DELAY), do_send);
       digitalWrite(BUILTIN_LED,LOW);
     }
-    if(pressed){
+
+    if(pressed == 1){
+      pressed = 0;
+      Serial.println(F("Pasó por acá: pressed"));
       // Prepare upstream data transmission at the next possible time.
       gps1.getLatLon(&lat, &lon, &alt, &kmph, &sats);
 
@@ -188,13 +197,12 @@ void do_send(osjob_t* j) {
       lpp.addAnalogInput(5, vBat);
       lpp.addAnalogInput(7, sats);
       
-      
       // read LPP packet bytes, write them to FIFO buffer of the LoRa module, queue packet to send to TTN
       LMIC_setTxData2(1, lpp.getBuffer(), lpp.getSize(), 0);
       
       Serial.print(lpp.getSize());
       Serial.println(F(" bytes long LPP packet queued."));
-      //digitalWrite(BUILTIN_LED, HIGH);
+      digitalWrite(BUILTIN_LED, LOW);
     }
   }
   // Next TX is scheduled after TX_COMPLETE event.
@@ -246,11 +254,14 @@ void setup() {
 
   pinMode(BUILTIN_LED, OUTPUT);
   pinMode(Button,INPUT);
+  attachInterrupt(Button, isr, FALLING);
+  
   digitalWrite(BUILTIN_LED, LOW);
 
   Serial.println(F("Ready to track"));
   
   // Start job
+  pressed = 0;
   do_send(&sendjob);
 }
 
