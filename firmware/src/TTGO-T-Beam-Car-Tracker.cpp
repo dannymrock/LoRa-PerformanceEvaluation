@@ -16,8 +16,8 @@
 #define DEBUG 1 // for real use comment this out
 #define I2C_SDA 21 // SDA1
 #define I2C_SCL 22 // SCL1
-//#define SEALEVELPRESSURE_HPA (1013.25) // this should be set according to the weather forecast
-//#define BME280_ADDRESS 0x76 // you can use I2C scanner demo to find your BME280 I2C address
+
+
 #define BUILTIN_LED 14 // T-Beam blue LED, see: http://tinymicros.com/wiki/TTGO_T-Beam
 #define BATTERY_PIN 35 // battery level measurement pin, here is the voltage divider connected
 #define Button 39
@@ -27,20 +27,14 @@ static PROGMEM u1_t NWKSKEY[16] = { 0x74, 0x9D, 0x7A, 0x2B, 0xBC, 0x0B, 0x8E, 0x
 static u1_t PROGMEM APPSKEY[16] = { 0x32, 0x84, 0xC9, 0x3F, 0xC6, 0xA1, 0xB7, 0x91, 0x6B, 0xD2, 0xE8, 0x88, 0x14, 0xE9, 0xD4, 0x15 }; // LoRaWAN AppSKey, application session key 
 static const u4_t DEVADDR = 0x26011402 ; // LoRaWAN end-device address (DevAddr)
 
-//devaddr_t DEVADDR = "";
-//devaddr_t NWKSKEY = "74 9D 7A 2B BC 0B 8E 0C A9 92 AF 62 6B 25 7A 60";
-//devaddr_t APPSKEY = "32 84 C9 3F C6 A1 B7 91 6B D2 E0 88 14 E9 D4 15";
 
 CayenneLPP lpp(51); // here we will construct Cayenne Low Power Payload (LPP) - see https://community.mydevices.com/t/cayenne-lpp-2-0/7510
 gps gps1; // class that is encapsulating additional GPS functionality
-//Adafruit_BME280 bme(I2C_SDA, I2C_SCL); // these pins are defined above
 
 double lat, lon, alt, kmph; // GPS data are saved here: Latitude, Longitude, Altitude, Speed in km/h
-//float tmp, hum, pressure, alt_barometric; // BME280 data are saved here: Temperature, Humidity, Pressure, Altitude calculated from atmospheric pressure
 float tmp=0.0;
 int sats; // GPS satellite count
 char s[32]; // used to sprintf for Serial output
-//bool status; // status after reading from BME280
 float vBat; // battery voltage
 long nextPacketTime;
 bool pressed=false;
@@ -56,7 +50,6 @@ void IRAM_ATTR isr() {
 }
 
 static osjob_t sendjob; // callback to LoRa send packet 
-//void getBME280Values(void); // declaration for function below
 void do_send(osjob_t* j); // declaration of send function
 
 
@@ -71,7 +64,7 @@ const unsigned int GPS_FIX_RETRY_DELAY = 10; // wait this many seconds when no G
 const unsigned int SHORT_TX_INTERVAL = 20; // when driving, send packets every SHORT_TX_INTERVAL seconds
 const double MOVING_KMPH = 10.0; // if speed in km/h is higher than MOVING_HMPH, we assume that car is moving
 
-// Pin mapping
+// Pin mapping T-Beam
 const lmic_pinmap lmic_pins = {
   .nss = 18,
   .rxtx = LMIC_UNUSED_PIN,
@@ -87,37 +80,6 @@ void getBatteryVoltage() {
   Serial.print(vBat);
   Serial.println("V");  
 }
-
-/*void getBME280Values() {
-
-  if (!status) { // we don't have BME280 connection, clear the values and exit
-    tmp = 0.0f;
-    pressure = 0.0f;
-    alt_barometric = 0.0f;
-    hum = 0.0f;
-    return;
-  }
-  
-  tmp = bme.readTemperature();
-  pressure = bme.readPressure() / 100.0F;
-  alt_barometric = bme.readAltitude(SEALEVELPRESSURE_HPA);
-  hum = bme.readHumidity();
-  
-  Serial.print(F("Temperature = "));
-  Serial.print(tmp);
-  Serial.print("C, ");
-  Serial.print("Pressure = ");
-  Serial.print(pressure);
-  Serial.print("hPa, ");
-  Serial.print("Approx. Altitude = ");
-  Serial.print(alt_barometric);
-  Serial.print("m, ");
-  Serial.print("Humidity = ");
-  Serial.print(hum);
-  Serial.println("%");
-
-  delay(100);
-}*/
 
 
 void onEvent (ev_t ev) {
@@ -197,8 +159,7 @@ void onEvent (ev_t ev) {
 void do_send(osjob_t* j) {  
 
   getBatteryVoltage();
-  //getBME280Values();
-  
+
   // Check if there is not a current TX/RX job running
   if (LMIC.opmode & OP_TXRXPEND)
   {
@@ -209,28 +170,6 @@ void do_send(osjob_t* j) {
     if (gps1.checkGpsFix())
     {
       digitalWrite(BUILTIN_LED,HIGH);
-      // Prepare upstream data transmission at the next possible time.
-      /*gps1.getLatLon(&lat, &lon, &alt, &kmph, &sats);
-
-      // we have all the data that we need, let's construct LPP packet for Cayenne
-      lpp.reset();
-      lpp.addGPS(1, lat, lon, alt);
-      lpp.addTemperature(2, tmp);
-      //lpp.addRelativeHumidity(3, hum);
-      //lpp.addBarometricPressure(4, pressure);
-      lpp.addAnalogInput(5, vBat);
-      // optional: send current speed, satellite count, altitude from barometric sensor and battery voltage
-      //lpp.addAnalogInput(6, kmph);
-      lpp.addAnalogInput(7, sats);
-      //lpp.addAnalogInput(8, alt_barometric);
-      
-      
-      // read LPP packet bytes, write them to FIFO buffer of the LoRa module, queue packet to send to TTN
-      LMIC_setTxData2(1, lpp.getBuffer(), lpp.getSize(), 0);
-      
-      Serial.print(lpp.getSize());
-      Serial.println(F(" bytes long LPP packet queued."));
-      digitalWrite(BUILTIN_LED, HIGH);*/
     }
     else
     {
@@ -246,13 +185,8 @@ void do_send(osjob_t* j) {
       lpp.reset();
       lpp.addGPS(1, lat, lon, alt);
       lpp.addTemperature(2, tmp);
-      //lpp.addRelativeHumidity(3, hum);
-      //lpp.addBarometricPressure(4, pressure);
       lpp.addAnalogInput(5, vBat);
-      // optional: send current speed, satellite count, altitude from barometric sensor and battery voltage
-      //lpp.addAnalogInput(6, kmph);
       lpp.addAnalogInput(7, sats);
-      //lpp.addAnalogInput(8, alt_barometric);
       
       
       // read LPP packet bytes, write them to FIFO buffer of the LoRa module, queue packet to send to TTN
@@ -281,27 +215,6 @@ void setup() {
   
   gps1.init();
 
-  //status = bme.begin(BME280_ADDRESS);
-  
-  /*if (!status) {
-    Serial.println(F("Could not find a valid BME280 sensor, check wiring!"));
-  } else {
-    Serial.println(F("BME280 initialized sucessfully"));
-    delay(1000); // stabilize sensor readings
-  }
-
-  if (status) {
-    Serial.println(F("BMP/BME280: normal mode, 16x pressure / 2x temperature / 1x humidity oversampling,"));
-    Serial.println(F("0.5ms standby period, filter 16x"));
-    bme.setSampling(Adafruit_BME280::MODE_NORMAL,
-                    Adafruit_BME280::SAMPLING_X2,  // temperature
-                    Adafruit_BME280::SAMPLING_X16, // pressure
-                    Adafruit_BME280::SAMPLING_X1,  // humidity
-                    Adafruit_BME280::FILTER_X16,
-                    Adafruit_BME280::STANDBY_MS_0_5 );
-
-    delay(500);
-  }*/
 
   Serial.println(F("Initializing LoRa module"));
   
@@ -314,30 +227,7 @@ void setup() {
   // by joining the network, precomputed session parameters are be provided.
   LMIC_setSession (0x1, DEVADDR, NWKSKEY, APPSKEY);
 
-  #if defined(CFG_eu868)
-  // Set up the channels used by the Things Network, which corresponds
-  // to the defaults of most gateways. Without this, only three base
-  // channels from the LoRaWAN specification are used, which certainly
-  // works, so it is good for debugging, but can overload those
-  // frequencies, so be sure to configure the full frequency range of
-  // your network here (unless your network autoconfigures them).
-  // Setting up channels should happen after LMIC_setSession, as that
-  // configures the minimal channel set.
-  // NA-US channels 0-71 are configured automatically
-  LMIC_setupChannel(0, 868100000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-  LMIC_setupChannel(1, 868300000, DR_RANGE_MAP(DR_SF12, DR_SF7B), BAND_CENTI);      // g-band
-  LMIC_setupChannel(2, 868500000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-  LMIC_setupChannel(3, 867100000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-  LMIC_setupChannel(4, 867300000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-  LMIC_setupChannel(5, 867500000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-  LMIC_setupChannel(6, 867700000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-  LMIC_setupChannel(7, 867900000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-  LMIC_setupChannel(8, 868800000, DR_RANGE_MAP(DR_FSK,  DR_FSK),  BAND_MILLI);      // g2-band
-  // TTN defines an additional channel at 869.525Mhz using SF9 for class B
-  // devices' ping slots. LMIC does not have an easy way to define set this
-  // frequency and support for class B is spotty and untested, so this
-  // frequency is not configured here.
-  #elif defined(CFG_us915)
+  #if defined(CFG_us915)
   // NA-US channels 0-71 are configured automatically
   // but only one group of 8 should (a subband) should be active
   // TTN recommends the second sub band, 1 in a zero based count.
