@@ -20,7 +20,7 @@
 
 #define BUILTIN_LED 14 // T-Beam blue LED, see: http://tinymicros.com/wiki/TTGO_T-Beam
 #define BATTERY_PIN 35 // battery level measurement pin, here is the voltage divider connected
-#define Button 39
+//#define Button 39
 
 // UPDATE WITH YOUR TTN KEYS AND ADDR.
 static PROGMEM u1_t NWKSKEY[16] = { 0x74, 0x9D, 0x7A, 0x2B, 0xBC, 0x0B, 0x8E, 0x0C, 0xA9, 0x92, 0xAF, 0x62, 0x6B, 0x25, 0x7A, 0x60 }; // LoRaWAN NwkSKey, network session key 
@@ -47,10 +47,10 @@ void os_getDevEui (u1_t* buf) { }
 void os_getDevKey (u1_t* buf) { }
 
 
-void IRAM_ATTR isr() {
+/*void IRAM_ATTR isr() {
   pressed = 1;
   Serial.print("ISR button"); 
-}
+}*/
 
 static osjob_t sendjob; // callback to LoRa send packet 
 void do_send(osjob_t* j); // declaration of send function
@@ -145,6 +145,7 @@ void onEvent (ev_t ev) {
       break;
     case EV_RXCOMPLETE:
       // data received in ping slot
+      pressed = 1;
       Serial.println(F("EV_RXCOMPLETE"));
       break;
     case EV_LINK_DEAD:
@@ -183,7 +184,7 @@ void do_send(osjob_t* j) {
       os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(GPS_FIX_RETRY_DELAY), do_send);
       digitalWrite(BUILTIN_LED,LOW);
     }
-
+    //pressed = 0;
     if(pressed == 1){
       pressed = 0;
       Serial.println(F("Pasó por acá: pressed"));
@@ -203,6 +204,24 @@ void do_send(osjob_t* j) {
       Serial.print(lpp.getSize());
       Serial.println(F(" bytes long LPP packet queued."));
       digitalWrite(BUILTIN_LED, LOW);
+    } else {
+      Serial.println(F("Pasó por acá: NOT pressed"));
+
+      //gps1.getLatLon(&lat, &lon, &alt, &kmph, &sats);
+
+      // we have all the data that we need, let's construct LPP packet for Cayenne
+      lpp.reset();
+      lpp.addGPS(1, 0, 0, 0);
+      lpp.addTemperature(2, 28);
+      lpp.addAnalogInput(5, 3.5);
+      lpp.addAnalogInput(7, 100);
+      
+      // read LPP packet bytes, write them to FIFO buffer of the LoRa module, queue packet to send to TTN
+      LMIC_setTxData2(1, lpp.getBuffer(), lpp.getSize(), 0);
+      
+      Serial.print(lpp.getSize());
+      Serial.println(F(" bytes long LPP packet queued."));
+      //digitalWrite(BUILTIN_LED, LOW);
     }
   }
   // Next TX is scheduled after TX_COMPLETE event.
@@ -247,14 +266,14 @@ void setup() {
   LMIC_setLinkCheckMode(0);
 
   // TTN uses SF9 for its RX2 window.
-  LMIC.dn2Dr = DR_SF9;
+  LMIC.dn2Dr = DR_SF12CR;
 
   // Set data rate and transmit power for uplink (note: txpow seems to be ignored by the library)
   LMIC_setDrTxpow(DR_SF7, 14);
 
   pinMode(BUILTIN_LED, OUTPUT);
-  pinMode(Button,INPUT);
-  attachInterrupt(Button, isr, FALLING);
+  //pinMode(Button,INPUT);
+  //attachInterrupt(Button, isr, FALLING);
   
   digitalWrite(BUILTIN_LED, LOW);
 
